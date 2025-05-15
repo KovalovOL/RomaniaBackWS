@@ -1,0 +1,8 @@
+fer
+opencv-python
+matplotlib
+imageio
+moviepy==1.0.3
+tensorflow==2.11
+fastapi
+uvicorn[standard]

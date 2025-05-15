@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emotion Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #liveVideo {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            object-fit: cover;
+        }
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+        .control-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        #confidenceInput {
+            width: 200px;
+            margin: 10px 0;
+        }
+        #confidenceValue {
+            display: inline-block;
+            min-width: 40px;
+            text-align: center;
+        }
+        select {
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        <video id="liveVideo" autoplay playsinline muted></video>
+    </div>
+    
+    <div id="controls">
+        <div class="control-group">
+            <select id="emotionSelect">
+                <option value="">Select Emotion</option>
+                <option value="happy">Happy 😊</option>
+                <option value="sad">Sad 😢</option>
+                <option value="angry">Angry 😠</option>
+                <option value="neutral">Neutral 😐</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="confidenceInput">
+                Confidence Threshold: <span id="confidenceValue">0.1</span>
+            </label>
+            <input type="range" id="confidenceInput" 
+                   min="0.1" max="1.0" step="0.1" value="0.1">
+        </div>
+
+        <button id="toggleBtn" onclick="toggleDetection()" disabled>
+            Start Detection
+        </button>
+        <div id="status">Status: Disconnected</div>
+    </div>
+
+    <script>
+        let isDetecting = false;
+        let ws = null;
+        let stream = null;
+        const video = document.getElementById('liveVideo');
+        const statusDiv = document.getElementById('status');
+        const emotionSelect = document.getElementById('emotionSelect');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const confidenceInput = document.getElementById('confidenceInput');
+        const confidenceValue = document.getElementById('confidenceValue');
+
+        // Инициализация элементов управления
+        confidenceInput.addEventListener('input', updateConfidenceValue);
+        
+        function updateConfidenceValue() {
+            confidenceValue.textContent = confidenceInput.value;
+        }
+
+        // Инициализация камеры
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                toggleBtn.disabled = false;
+            } catch (err) {
+                alert('Error accessing camera: ' + err.message);
+            }
+        }
+
+        // Управление детекцией
+        async function toggleDetection() {
+            if (isDetecting) {
+                stopDetection();
+            } else {
+                await startDetection();
+            }
+        }
+
+        // Запуск детекции
+        async function startDetection() {
+            const emotion = emotionSelect.value;
+            if (!emotion) {
+                alert('Please select an emotion first');
+                return;
+            }
+
+            isDetecting = true;
+            toggleBtn.textContent = 'Stop Detection';
+            statusDiv.textContent = 'Status: Connecting...';
+
+            // Формируем параметры
+            const params = { 
+                emotion: emotion,
+                confidence: parseFloat(confidenceInput.value)
+            };
+
+            // Убираем confidence если значение по умолчанию
+            if (params.confidence === 0.1) {
+                delete params.confidence;
+            }
+
+            ws = new WebSocket('ws://127.0.0.1:8000/ws');
+            
+            ws.onopen = () => {
+                statusDiv.textContent = 'Status: Connected';
+                ws.send(JSON.stringify(params));
+                sendFrames();
+            };
+
+            ws.onmessage = (e) => {
+                const response = JSON.parse(e.data);
+                if (response.status === 'detected') {
+                    showDetectionResult(response);
+                    stopDetection();
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = 'Status: Error';
+                stopDetection();
+            };
+
+            ws.onclose = () => {
+                if (isDetecting) {
+                    statusDiv.textContent = 'Status: Disconnected';
+                    stopDetection();
+                }
+            };
+        }
+
+        // Остановка детекции
+        function stopDetection() {
+            isDetecting = false;
+            toggleBtn.textContent = 'Start Detection';
+            statusDiv.textContent = 'Status: Disconnected';
+            
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        // Отправка кадров
+        function sendFrames() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            let frameCounter = 0;
+
+            const sendFrame = () => {
+                if (!isDetecting || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+
+                // Оптимизация: отправляем каждый 3-й кадр (~10 FPS)
+                if (frameCounter++ % 3 === 0) {
+                    canvas.toBlob(blob => {
+                        if (blob) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                try {
+                                    ws.send(reader.result);
+                                } catch (error) {
+                                    console.error('Error sending frame:', error);
+                                    stopDetection();
+                                }
+                            };
+                            reader.readAsArrayBuffer(blob);
+                        }
+                    }, 'image/jpeg', 0.7);
+                }
+
+                requestAnimationFrame(sendFrame);
+            };
+
+            sendFrame();
+        }
+
+        // Показать результат
+        function showDetectionResult(result) {
+            const message = `Detected ${result.emotion} with ${Math.round(result.confidence * 100)}% confidence!`;
+            alert(message);
+        }
+
+        // Инициализация при загрузке
+        window.onload = initCamera;
+    </script>
+</body>
+</html>
