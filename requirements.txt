@@ -3,6 +3,6 @@ opencv-python
 matplotlib
 imageio
 moviepy==1.0.3
-tensorflow==2.11
+tensorflow-cpu==2.11.0
 fastapi
 uvicorn[standard]
