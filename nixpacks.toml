@@ -3,17 +3,22 @@ nixPkgs = [
   "python39",
   "gcc",
   "ffmpeg",
-  "mesa",
+  "mesa.drivers",
   "libglvnd",
   "glib",
   "cairo",
-  "stdenv.cc.cc.lib"
+  "stdenv.cc.cc.lib",
+  "xorg.libX11",
+  "xorg.libXext",
+  "xorg.libXi",
+  "xorg.libXrender"
 ]
 
 [phases.install]
 cmd = """
   pip install --no-cache-dir -r requirements.txt && \
-  rm -rf /root/.cache/pip
+  rm -rf /root/.cache/pip && \
+  find /usr/local/lib/python*/site-packages -name "*.so" | xargs strip -s
 """
 
 [phases.start]

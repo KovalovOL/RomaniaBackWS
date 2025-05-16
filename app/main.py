@@ -6,6 +6,13 @@ import asyncio
 from typing import Set
 import logging
 
+
+import os
+# Отключаем ненужные функции OpenCV
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+os.environ["OPENCV_IO_ENABLE_JASPER"] = "0"
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+
 # Log settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
