@@ -1,5 +1,11 @@
 [phases.setup]
-nixPkgs = ["python39"]
+nixPkgs = [
+  "python39",
+  "gcc",
+  "ffmpeg",
+  "libGL",
+  "mesa"
+]
 
 [phases.install]
 cmd = """
