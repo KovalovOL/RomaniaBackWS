@@ -6,13 +6,19 @@ nixPkgs = [
   "libGL",
   "mesa",
   "libglvnd",
-  "stdenv.cc.cc.lib"
+  "stdenv.cc.cc.lib",
+  "libx11",
+  "libxext",
+  "libxtst",
+  "libxi",
+  "libxrender"
 ]
 
 [phases.install]
 cmd = """
   pip install --no-cache-dir -r requirements.txt && \
-  rm -rf /root/.cache/pip
+  rm -rf /root/.cache/pip && \
+  find /usr/local/lib/python*/site-packages -name "*.so" | xargs strip -s
 """
 
 [phases.start]
