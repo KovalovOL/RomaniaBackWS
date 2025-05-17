@@ -31,7 +31,7 @@ class DetectorPool:
         self.detectors = asyncio.Queue()
         for i in range(pool_size):
             logger.debug(f"Creating detector {i+1}/{pool_size}")
-            self.detectors.put_nowait(FER(mtcnn=True))
+            self.detectors.put_nowait(FER(mtcnn=False))
         logger.info("All detectors initialized successfully")
 
     async def detect(self, frame: np.ndarray) -> list:
@@ -103,7 +103,9 @@ async def websocket_endpoint(websocket: WebSocket):
             frame_data = await websocket.receive_bytes()
             receive_time = (datetime.now() - frame_start).total_seconds()
             logger.debug(f"Frame #{frame_counter} received in {receive_time:.3f}s, size: {len(frame_data)} bytes")
-            
+            logger.info("Get Frame")
+
+
             # Декодируем кадр
             decode_start = datetime.now()
             frame = cv2.imdecode(np.frombuffer(frame_data, np.uint8), cv2.IMREAD_COLOR)
@@ -124,6 +126,9 @@ async def websocket_endpoint(websocket: WebSocket):
             # Проверка результатов
             detected = False
             for i, face in enumerate(emotions_data):
+                logger.info("In FOR")
+
+
                 current_confidence = face.get('emotions', {}).get(target_emotion, 0)
                 logger.debug(f"Face #{i+1}: {target_emotion} confidence = {current_confidence:.2f}")
                 
